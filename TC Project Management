@@ -1,0 +1,193 @@
+library(shiny)
+library(plotly)
+library(shinyWidgets)
+library(dplyr)
+library(editData)
+library(DT)
+library(dygraphs)
+
+fields <- c('name', 'number', 'apt', 'email')
+fields2 <- c('packages', 'day')
+if (interactive()) {
+
+
+  
+  saveData1 <- function(newdata) {
+    newdata <- data.frame(t(newdata))
+    if (exists("analysis")) {
+      analysis <<- rbind(analysis, newdata)
+    } else {
+      analysis <<- newdata
+    }
+  }
+  
+analsis <- analysis[order(analysis$packages),]
+ 
+    
+  saveData <- function(data) {
+    data <- as.data.frame(t(data))
+    if (exists("responses")) {
+      responses <<- rbind(responses, data)
+    } else {
+      responses <<- data
+    }
+  }
+  # Load all previous x1
+  # ---- This is one of the two functions we will change for every storage type ----
+  loadData <- function() {
+    if (exists("responses")) {
+      responses
+    }
+  }
+  
+  loadData1 <- function() {
+    if (exists("analysis")) {
+      analysis
+    }
+  }
+  
+  
+  shinyApp(
+    ui = fluidPage(
+      setBackgroundColor(
+        color = c("#F7FBFF", "#2171B5"),
+        gradient = "radial",
+        direction = c("top", "left")
+      ),
+tabsetPanel(
+tabPanel("Resident Table", fluid = TRUE,
+sidebarLayout(
+sidebarPanel(
+textInput("name", "Name", ""),
+textInput("number", "Number", ""),
+textInput("apt", "Apt", ""),
+textInput("email", "Email", ""),
+actionButton("submit", "Submit"),
+br(),
+),
+mainPanel(
+DTOutput('responses'),
+br(),
+actionButton("deleteRows","Delete Row"),
+br(),
+br(),
+br(),
+actionButton("status","Email",NULL),
+verbatimTextOutput("value"),
+actionButton("status2","Picked Up",NULL),
+verbatimTextOutput("order"),
+textOutput("count"),
+textOutput("count2"),
+br(),
+#sliderInput("packages", "Number of Packages:", min = 0, max = 100, value = 0, sep=''),
+numericInput("packages","Number of Packages Today:", ""),
+selectInput("day",label="Select Day", 
+            choices = c("","Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")),
+actionButton("save", "Save"),
+)
+)
+),
+tabPanel("Analysis", fluid = TRUE,
+sidebarLayout(
+sidebarPanel(    selectInput('xcol','X Variable', names(analysis)),
+                 selectInput('ycol','Y Variable', names(analysis)),
+                 selected = names(responses)[[2]]
+  ),
+mainPanel(plotlyOutput('plot')
+)
+)
+)
+)
+),
+server = function(input, output) {
+# Whenever a field is filled, aggregate all form data
+formData <- reactive({
+data <- sapply(fields, function(x) input[[x]])
+data
+})
+
+
+formData1 <- reactive({
+  newdata <- sapply(fields2, function(x) input[[x]])
+  newdata
+})
+# When the Submit button is clicked, save the form data
+observeEvent(input$submit, {
+saveData(formData())
+})
+
+observeEvent(input$save, {
+  saveData1(formData1())
+})
+
+# Show the previous x1
+# (update with current response when Submit is clicked)
+output$responses <- DT::renderDataTable({
+input$submit
+loadData()
+})
+
+
+output$analysis <- DT::renderDataTable({
+  input$save
+  loadData1()
+})
+
+
+
+a = responses
+#     x$Date = Sys.time() + seq_len(nrow(x))
+output$responses = renderDT(a, selection = 'single', rownames = F, editable = T)
+proxy = dataTableProxy('x1')
+observeEvent(input$responses_cell_edit, {
+  info = input$responses_cell_edit
+  str(info)
+  i = info$row
+  j = info$col + 1  # column index offset by 1
+  v = info$value
+  a[i, j] <<- DT::coerceValue(v, a[i, j])
+  replaceData(proxy, a, resetPaging = FALSE, rownames = FALSE)
+})
+
+
+counter <- reactiveValues(countervalue = 0) # Defining & initializing the reactiveValues object
+counter2 <- reactiveValues(countervalue2 = 0) # Defining & initializing the reactiveValues object
+
+observeEvent(input$status, {
+  counter$countervalue <- counter$countervalue + 1     # if the add button is clicked, increment the value by 1 and update it
+})
+observeEvent(input$status2, {
+  counter2$countervalue2 <- counter2$countervalue2 + 1  # if the sub button is clicked, decrement the value by 1 and update it
+})
+#observeEvent(input$reset, {
+#  counter$countervalue <- 0                     # if the reset button is clicked, set the counter value to zero
+#})
+output$count <- renderText({
+  paste("Amount of Emails: ", counter$countervalue)   # print the latest value stored in the reactiveValues object
+})
+output$count2 <- renderText({
+  paste("Amount of Pickup's: ", counter2$countervalue2)   # print the latest value stored in the reactiveValues object
+})
+
+
+x <- reactive({
+  analysis[,input$xcol]
+})
+
+y <- reactive({
+  analysis[,input$ycol]
+})
+
+
+output$plot <- renderPlotly(
+  analysis <- plot_ly(
+    x = x(),
+    y = y(), 
+    type = 'bar'
+  ))
+
+
+
+}
+)
+}
